@@ -16,20 +16,24 @@ OUT = ROOT / "site" / "data.json"
 
 JUNIOR_RE = re.compile(
     r"\bU ?\d{1,2}|under ?\d|\bU/\d|junior|girls|grading|^\s*1[0-8] ?[A-H]\b|^\s*1[0-8][A-H]\b|"
-    r"kurle|mccabe|ebkca|wringe|turner shield|molly strano|U1\d",
+    r"kurle|mccabe|ebkca|wringe|molly strano|U1\d",
     re.I,
 )
-WOMEN_RE = re.compile(r"women|cathy moloney", re.I)
+# Only grades with "women" in the name. Note some men's grades are named after women
+# (e.g. "Cathy Moloney Shield" is an NWMCA men's grade) and VTCA's "Turner Shield" is the
+# men's 1st XI, so neither is matched by name here.
+WOMEN_RE = re.compile(r"women", re.I)
 FORMATS = ["One Day", "Two Day", "T20"]
 
 
 def category(grade, team):
+    """0 = men's, 1 = women's, 2 = juniors (incl. junior girls)."""
     text = f"{grade} | {team}"
     if WOMEN_RE.search(text) and not re.search(r"girls|U ?1\d", text, re.I):
-        return 1  # women
+        return 1  # women's
     if JUNIOR_RE.search(text):
-        return 2  # junior
-    return 0  # senior
+        return 2  # juniors
+    return 0  # men's
 
 
 def result_code(won, status, text):
@@ -136,6 +140,8 @@ def main():
             name = re.sub(r"\s+", " ", r["name"] or "Unknown")
             if name.isupper() or name.islower():
                 name = name.title()
+            else:  # mixed case: just capitalise all-lowercase words ("Jay jayasuriya")
+                name = " ".join(w[:1].upper() + w[1:] if w.islower() else w for w in name.split(" "))
             players.append({"n": name, "x": 1 if placeholder else 0})
         pid_to_idx[r["player_id"]] = prof_index[r["profile"]]
 

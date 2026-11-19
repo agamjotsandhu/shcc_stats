@@ -51,7 +51,7 @@ SELECT name, wickets, best_bowling, five_wicket_hauls FROM career_stats ORDER BY
 -- season-by-season runs for one player
 SELECT m.season, SUM(b.runs) FROM batting b JOIN matches m USING(match_id)
 JOIN players p USING(player_id) WHERE p.name LIKE '%Culph%' GROUP BY m.season;
--- seniors only (filter by grade name)
+-- men's only (filter by grade name)
 SELECT p.name, SUM(b.runs) runs FROM batting b JOIN matches m USING(match_id) JOIN players p USING(player_id)
 WHERE m.grade_name NOT LIKE 'U1%' GROUP BY LOWER(TRIM(p.name)) ORDER BY runs DESC;
 ```
@@ -63,7 +63,7 @@ WHERE m.grade_name NOT LIKE 'U1%' GROUP BY LOWER(TRIM(p.name)) ORDER BY runs DES
 
 ## Notes / caveats
 - **Data coverage:** seasons go back to 1999/00, but older games often have results only and no scorecard. 2010-era scorecards may have runs but no balls, 4s or 6s. The `matches.has_scorecard` column flags this.
-- **Junior and senior games are both included.** Filter on `grade_name` if you want seniors only.
+- **Men's, women's and junior games are all included.** Filter on `grade_name` to isolate one.
 - **5-wicket hauls** are per innings. **10-wicket matches** are per match (relevant for two-day games).
 - **Ducks** = dismissed for 0. Not-outs on 0 aren't counted.
 - Overs are assumed to be 6 balls.
@@ -71,10 +71,10 @@ WHERE m.grade_name NOT LIKE 'U1%' GROUP BY LOWER(TRIM(p.name)) ORDER BY runs DES
 - **Scheduling:** e.g. cron `0 22 * * 0,1 cd /path/to/shcc_stats && python update_matches.py`, or Windows Task Scheduler.
 
 ## Stats website (`site/`)
-A static, minimal stats site (leaderboards, records, milestone clubs, player profiles, season results) styled with the brand tokens from `player-announcements.md`.
+A static, minimal stats site (leaderboards, records, milestone clubs, upcoming milestones for active players, player profiles, season results) styled with the brand tokens from `player-announcements.md`.
 ```bash
 python build_site.py                      # export the DB to site/data.json (re-run after update_matches.py)
 python -m http.server -d site 8000        # preview at http://localhost:8000
 ```
 The `site/` folder can be deployed as-is to any static host (GitHub Pages, Netlify, Cloudflare Pages).
-Competitions are classified as Seniors / Women / Juniors from the grade and team names in `build_site.py` (`category()`).
+Competitions are classified as Men's / Women's / Juniors from the grade and team names in `build_site.py` (`category()`). Men's grades named after women (e.g. Cathy Moloney Shield) and VTCA's Turner Shield (men's 1st XI) are deliberately not matched as women's / juniors.
