@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SHCC Stats</title>
+<meta name="description" content="Historical stats, leaderboards and records for Sydenham Hillside Cricket Club.">
+<link rel="icon" href="assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="bolt" viewBox="0 0 12 20"><path d="M7.5 0 0 11.5h4.6L3 20l9-12.6H7.2L9.6 0z" fill="currentColor"/></symbol>
+</svg>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="lockup" href="#/">
+      <img src="assets/logo.png" alt="SHCC Storm logo" width="46" height="42">
+      <span class="lockup-rule"></span>
+      <span class="lockup-text"><span>Sydenham Hillside</span><span class="teal">Cricket Club</span></span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#/" data-nav="home">Home</a>
+      <a href="#/leaders" data-nav="leaders">Leaderboards</a>
+      <a href="#/records" data-nav="records">Records</a>
+      <a href="#/players" data-nav="players">Players</a>
+      <a href="#/seasons" data-nav="seasons">Seasons</a>
+    </nav>
+  </div>
+  <div class="wrap comp-bar">
+    <span class="eyebrow muted">Competition</span>
+    <div class="seg" id="comp-filter" role="group" aria-label="Competition filter">
+      <button data-cat="all">All</button>
+      <button data-cat="0">Seniors</button>
+      <button data-cat="1">Women</button>
+      <button data-cat="2">Juniors</button>
+    </div>
+  </div>
+</header>
+
+<main id="app" class="wrap">
+  <p class="loading eyebrow">Loading club history…</p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="footer-line">Sydenham <svg class="b"><use href="#bolt"/></svg> Hillside <svg class="b"><use href="#bolt"/></svg> Cricket Club</p>
+    <p class="footer-line teal">One club, one storm</p>
+    <p class="footer-note" id="footer-note">SHCC matches only, from PlayHQ scorecards. Older seasons may have results without full scorecards.</p>
+  </div>
+</footer>
+
+<div class="tip" id="tip" role="tooltip"></div>
+<script src="app.js"></script>
+</body>
+</html>
