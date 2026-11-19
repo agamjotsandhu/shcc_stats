@@ -71,7 +71,7 @@ WHERE m.grade_name NOT LIKE 'U1%' GROUP BY LOWER(TRIM(p.name)) ORDER BY runs DES
 - **Scheduling:** e.g. cron `0 22 * * 0,1 cd /path/to/shcc_stats && python update_matches.py`, or Windows Task Scheduler.
 
 ## Stats website (`site/`)
-A static, minimal stats site (leaderboards, records, milestone clubs, upcoming milestones for active players, player profiles, season results) styled with the brand tokens from `player-announcements.md`.
+A static, minimal stats site (leaderboards, records, milestone clubs, upcoming milestones for current-season players, player profiles, season results) styled with the brand tokens from `player-announcements.md`.
 ```bash
 python build_site.py                      # export the DB to site/data.json (re-run after update_matches.py)
 python -m http.server -d site 8000        # preview at http://localhost:8000

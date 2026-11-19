@@ -388,35 +388,27 @@
     on("rec-fmt", (v) => { recordsState.fmt = v; pageRecords(); });
   }
 
-  // Upcoming milestones: active players closing in on career thresholds (within the selected competition)
+  // Upcoming milestones: players in the current season closing in on round career figures
+  // (multiples of `step`) within the selected competition.
   const MILESTONES = [
-    { key: "runs", title: "Runs", unit: "runs", get: (s) => s.runs,
-      thr: [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7500, 10000], win: (t) => Math.min(250, Math.max(50, t * 0.1)) },
-    { key: "wk", title: "Wickets", unit: "wkts", get: (s) => s.wk,
-      thr: [25, 50, 75, 100, 150, 200, 250, 300, 400, 500], win: (t) => Math.max(5, t * 0.1) },
-    { key: "m", title: "Matches", unit: "games", get: (s) => s.m,
-      thr: [50, 100, 150, 200, 250, 300, 350, 400, 450, 500], win: (t) => Math.max(5, t * 0.05) },
-    { key: "fifty", title: "50+ scores", unit: "50+ scores", get: (s) => s.f50 + s.h100,
-      thr: [5, 10, 15, 20, 25, 30, 40, 50], win: (t) => (t >= 20 ? 2 : 1) },
-    { key: "dis", title: "Dismissals", unit: "dismissals", get: (s) => s.dis,
-      thr: [25, 50, 75, 100, 150, 200, 250, 300], win: (t) => Math.max(5, t * 0.1) },
+    { key: "runs", title: "Runs", unit: "runs", get: (s) => s.runs, step: 500, win: (t) => Math.min(250, t * 0.1) },
+    { key: "wk", title: "Wickets", unit: "wkts", get: (s) => s.wk, step: 50, win: (t) => Math.max(5, t * 0.1) },
+    { key: "m", title: "Matches", unit: "games", get: (s) => s.m, step: 50, win: (t) => Math.max(5, t * 0.05) },
+    { key: "fifty", title: "50+ scores", unit: "50+ scores", get: (s) => s.f50 + s.h100, step: 10, win: (t) => (t >= 20 ? 2 : 1) },
+    { key: "dis", title: "Dismissals", unit: "dismissals", get: (s) => s.dis, step: 50, win: (t) => Math.max(5, t * 0.1) },
   ];
-  const milestoneState = { active: "2" };
   function pageMilestones() {
-    const st = milestoneState;
     const latest = D.seasons.length - 1;
     const all = agg();
     const cur = agg({ season: latest });
-    const prev = latest > 0 ? agg({ season: latest - 1 }) : new Map();
-    const active = (p) => (cur.get(p)?.m > 0) || (st.active === "2" && prev.get(p)?.m > 0);
-    const players = [...all.entries()].filter(([p]) => isReal(p) && active(p));
+    const players = [...all.entries()].filter(([p]) => isReal(p) && cur.get(p)?.m > 0);
 
     const upcoming = MILESTONES.map((ms) => {
       const list = [];
       for (const [p, s] of players) {
         const v = ms.get(s);
-        const t = ms.thr.find((x) => x > v);
-        if (t == null || t - v > ms.win(t)) continue;
+        const t = (Math.floor(v / ms.step) + 1) * ms.step;
+        if (t - v > ms.win(t)) continue;
         list.push({ p, v, t, gap: t - v, close: (t - v) / ms.win(t) });
       }
       list.sort((a, b) => a.close - b.close || b.t - a.t || pname(a.p).localeCompare(pname(b.p)));
@@ -430,8 +422,8 @@
       if (!c) continue;
       for (const ms of MILESTONES) {
         const now = ms.get(s), before = now - ms.get(c);
-        const hit = ms.thr.filter((t) => before < t && t <= now);
-        if (hit.length) reached.push({ p, ms, t: hit[hit.length - 1], now });
+        const t = Math.floor(now / ms.step) * ms.step;
+        if (t > 0 && before < t) reached.push({ p, ms, t, now });
       }
     }
     reached.sort((a, b) => MILESTONES.indexOf(a.ms) - MILESTONES.indexOf(b.ms) || b.t - a.t || pname(a.p).localeCompare(pname(b.p)));
@@ -443,17 +435,15 @@
 
     $app.innerHTML = `
       <div class="page-head"><p class="eyebrow">${esc(catName())} ${boltSvg} ${esc(seasonLabel(latest))}</p><h1 class="page-title">Milestones</h1></div>
-      <p class="lede" style="margin:0 0 20px">Active players closing in on career milestones. Totals are for ${cat === "all" ? "all competitions combined" : esc(catName()) + " competitions"} and match Play Cricket.</p>
-      <div class="controls">${selectHtml("ms-active", "Active players", [["1", `Played in ${seasonLabel(latest)}`], ["2", `Played since ${seasonLabel(Math.max(0, latest - 1))}`]], st.active)}</div>
+      <p class="lede" style="margin:0 0 20px">Players who have played in ${esc(seasonLabel(latest))} closing in on career milestones. Totals are for ${cat === "all" ? "all competitions combined" : esc(catName()) + " competitions"} and match Play Cricket.</p>
       ${divider("Coming up")}
-      <div class="boards">${upcoming.map(upBoard).join("")}</div>
+      <div class="boards">${upcoming.filter((u) => u.list.length).map(upBoard).join("") || '<p class="empty">No one is close to a milestone right now.</p>'}</div>
       ${divider(`Reached in ${seasonLabel(latest)}`)}
       <div class="boards wide">
         ${board(`Milestones reached${reached.length ? ` · ${reached.length}` : ""}`,
           reached.map((x) => ({ name: plink(x.p), val: fmtN(x.t), small: x.ms.unit, sub: `Now on ${fmtN(x.now)}` })))}
       </div>
     `;
-    on("ms-active", (v) => { st.active = v; pageMilestones(); });
   }
 
   // Players
