@@ -26,3 +26,4 @@ data/shcc_career_stats.csv
 .vscode/
 .idea/
 *.log
+.vercel

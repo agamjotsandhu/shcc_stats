@@ -1,0 +1,6 @@
+# Only site/ is needed for the deploy; keep the scraper data out of uploads
+data/
+__pycache__/
+.claude/
+*.py
+requirements.txt
