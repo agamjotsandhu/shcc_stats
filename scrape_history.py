@@ -72,6 +72,8 @@ def main():
     n = rebuild_from_cache(con)
     log.info("Database holds %d matches", n)
     log.info("Career stats CSV: %s", export_csv(con))
+    log.info("Next: run `python sync_official.py` to align totals with Play Cricket "
+             "and pick up matches the grade walk missed.")
 
 
 if __name__ == "__main__":

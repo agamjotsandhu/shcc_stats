@@ -10,8 +10,13 @@ pip install requests
 ## Usage
 ```bash
 python scrape_history.py          # one-off full history (resumable – just re-run if interrupted)
-python update_matches.py          # afterwards: pull new/changed matches (current + last season)
+python sync_official.py           # align every player's totals with Play Cricket (resumable, ~1 hr first time)
+python update_matches.py          # afterwards: pull new/changed matches + re-sync totals (current + last season)
+python build_site.py              # refresh the website data
 ```
+
+### Play Cricket is the source of truth
+`career_stats` (and the CSV and website) use each player's official Play Cricket totals: the "Career" tab on play.cricket.com.au with Club = Sydenham-Hillside, fetched per season by `sync_official.py` into `official_season_stats` and merged into `season_stats`. Scorecards alone can't reproduce them, because Play Cricket counts some games it doesn't publish scorecards for and skips some it does. The sync also uses each player's match list to find SHCC matches the grade walk misses (e.g. T20 knockouts). Same-name player IDs are still merged into one profile by summing their official totals. A player whose profile is private on Play Cricket keeps scorecard-derived totals.
 Useful flags:
 - `scrape_history.py --from 2015`: only seasons from 2015/16 onwards
 - `scrape_history.py --rebuild-only`: rebuild the DB from cached JSON without any network calls (e.g. after changing parsing logic)

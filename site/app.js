@@ -89,9 +89,27 @@
     (s.seasons ||= new Set()).add(se);
   }
 
+  /* Official Play Cricket adjustment rows (see build_site.py official_adjustments):
+     [profile, season, cat, m, inn, no, runs, 50s, 100s, ducks, 4s, 6s, balls, mdns, runsConc, wkts, 5w, ct, wkCt, st, ro, hs, hsNo, bestW, bestR]
+     They carry matches Play Cricket counts but doesn't publish scorecards for, so totals match the official career figures. */
+  const A = { P: 0, S: 1, CAT: 2 };
+  function addAdj(s, r) {
+    if (r[3] > 0 || r[4] > 0 || r[12] > 0) {
+      const se = r[1];
+      if (s.first == null || se < s.first) s.first = se;
+      if (s.last == null || se > s.last) s.last = se;
+      (s.seasons ||= new Set()).add(se);
+    }
+    s.m += r[3]; s.inn += r[4]; s.no += r[5]; s.runs += r[6]; s.f50 += r[7]; s.h100 += r[8]; s.ducks += r[9];
+    s.fours += r[10]; s.sixes += r[11]; s.bb += r[12]; s.mdn += r[13]; s.rc += r[14]; s.wk += r[15]; s.w5 += r[16];
+    s.ct += r[17]; s.wkc += r[18]; s.st += r[19]; s.ro += r[20];
+    if (r[21] >= 0 && (r[21] > s.hs || (r[21] === s.hs && r[22]))) { s.hs = r[21]; s.hsNo = r[22]; }
+    if (r[23] >= 0 && (r[23] > s.bestW || (r[23] === s.bestW && r[24] < s.bestR))) { s.bestW = r[23]; s.bestR = r[24]; }
+  }
+
   const aggCache = new Map();
-  /** Aggregate per key. keyFn(row) → key (default player). filter(mi) → bool. */
-  function aggregate(filter, cacheKey, keyFn = (r) => r[1]) {
+  /** Aggregate per key. keyFn(row) → key (default player). filter(mi) → bool; filter.adj(row) → bool. */
+  function aggregate(filter, cacheKey, keyFn = (r) => r[1], adjKeyFn = (r) => r[A.P]) {
     if (cacheKey && aggCache.has(cacheKey)) return aggCache.get(cacheKey);
     const out = new Map();
     const get = (k) => { let s = out.get(k); if (!s) { s = blank(); out.set(k, s); } return s; };
@@ -99,15 +117,19 @@
     for (const r of D.bat) if (filter(r[0])) addBat(get(keyFn(r)), r);
     for (const r of D.bowl) if (filter(r[0])) addBowl(get(keyFn(r)), r);
     for (const r of D.field) if (filter(r[0])) addField(get(keyFn(r)), r);
+    if (filter.adj) for (const r of D.adj) if (filter.adj(r)) addAdj(get(adjKeyFn(r)), r);
     out.forEach(derive);
     if (cacheKey) aggCache.set(cacheKey, out);
     return out;
   }
   function filterFor({ season = "all", fmt = "all" } = {}) {
-    return (mi) => {
+    const f = (mi) => {
       const m = D.matches[mi];
       return (cat === "all" || m[M.CAT] === +cat) && (season === "all" || m[M.SEASON] === +season) && (fmt === "all" || m[M.FMT] === +fmt);
     };
+    // Official totals aren't split by format, so they only apply to "All formats".
+    if (fmt === "all") f.adj = (r) => (cat === "all" || r[A.CAT] === +cat) && (season === "all" || r[A.S] === +season);
+    return f;
   }
   const agg = (opts = {}) => aggregate(filterFor(opts), `${cat}|${opts.season ?? "all"}|${opts.fmt ?? "all"}`);
 
@@ -310,7 +332,7 @@
         ${conf.minLabel ? `<label class="field"><span class="eyebrow">${conf.minLabel}</span><input type="number" id="lb-min" min="0" value="${min}"></label>` : ""}
       </div>
       <div id="lb-table"></div>
-      ${conf.minLabel ? `<p class="note">${conf.minLabel} applies when ranking by average, economy or strike rate. Strike rates use only innings with balls recorded.</p>` : ""}
+      <p class="note">${st.fmt === "all" ? "Totals match each player's Play Cricket career figures (Club: Sydenham-Hillside)." : "Format splits are built from published scorecards, so they can be slightly below Play Cricket's overall totals."}${conf.minLabel ? ` ${conf.minLabel} applies when ranking by average, economy or strike rate. Strike rates use only innings with balls recorded.` : ""}</p>
     `;
     const data = agg({ season: st.season, fmt: st.fmt });
     const col = conf.cols.find((c) => c.key === sort);
@@ -336,7 +358,7 @@
 
     const inns = D.bat.filter((r) => f(r[0]) && isReal(r[1])).sort((a, b) => b[2] - a[2] || b[6] - a[6] || a[3] - b[3]).slice(0, 10);
     const spells = D.bowl.filter((r) => f(r[0]) && isReal(r[1]) && r[5] > 0).sort((a, b) => b[5] - a[5] || a[4] - b[4]).slice(0, 10);
-    const bySeason = aggregate(f, `rec|${cat}|${recordsState.fmt}`, (r) => r[1] * 1000 + D.matches[r[0]][M.SEASON]);
+    const bySeason = aggregate(f, `rec|${cat}|${recordsState.fmt}`, (r) => r[1] * 1000 + D.matches[r[0]][M.SEASON], (r) => r[A.P] * 1000 + r[A.S]);
     const topSeason = (key, n) => [...bySeason.entries()].filter(([k, s]) => isReal(Math.floor(k / 1000)) && s[key] > 0)
       .sort((a, b) => b[1][key] - a[1][key]).slice(0, n);
     const seasonRuns = topSeason("runs", 10).map(([k, s]) => ({ name: plink(Math.floor(k / 1000)), val: s.runs, small: `${s.inn} inn`, sub: seasonLabel(k % 1000) }));
@@ -401,20 +423,24 @@
 
   // Player profile
   function indexPlayers() {
-    byPlayer = D.players.map(() => ({ app: [], bat: [], bowl: [], field: [] }));
+    byPlayer = D.players.map(() => ({ app: [], bat: [], bowl: [], field: [], adj: [] }));
     D.app.forEach((r) => byPlayer[r[1]].app.push(r));
     D.bat.forEach((r) => byPlayer[r[1]].bat.push(r));
     D.bowl.forEach((r) => byPlayer[r[1]].bowl.push(r));
     D.field.forEach((r) => byPlayer[r[1]].field.push(r));
+    D.adj.forEach((r) => byPlayer[r[A.P]].adj.push(r));
   }
-  function playerAgg(p, keyFn, filter = () => true) {
+  /** keyFn(season, cat) → group key. Includes official adjustments. */
+  function playerAgg(p, keyFn) {
     const out = new Map();
     const get = (k) => { let s = out.get(k); if (!s) { s = blank(); out.set(k, s); } return s; };
     const P = byPlayer[p];
-    P.app.forEach((r) => filter(r[0]) && addApp(get(keyFn(r[0])), r[0]));
-    P.bat.forEach((r) => filter(r[0]) && addBat(get(keyFn(r[0])), r));
-    P.bowl.forEach((r) => filter(r[0]) && addBowl(get(keyFn(r[0])), r));
-    P.field.forEach((r) => filter(r[0]) && addField(get(keyFn(r[0])), r));
+    const k = (mi) => keyFn(D.matches[mi][M.SEASON], D.matches[mi][M.CAT]);
+    P.app.forEach((r) => addApp(get(k(r[0])), r[0]));
+    P.bat.forEach((r) => addBat(get(k(r[0])), r));
+    P.bowl.forEach((r) => addBowl(get(k(r[0])), r));
+    P.field.forEach((r) => addField(get(k(r[0])), r));
+    P.adj.forEach((r) => addAdj(get(keyFn(r[A.S], r[A.CAT])), r));
     out.forEach(derive);
     return out;
   }
@@ -445,8 +471,8 @@
     const surname = parts.length > 1 ? parts.pop() : parts[0];
     const given = parts.length && parts[0] !== surname ? parts.join(" ") : "";
     const tot = playerAgg(p, () => "t").get("t") || derive(blank());
-    const byCat = playerAgg(p, (mi) => D.matches[mi][M.CAT]);
-    const bySeason = playerAgg(p, (mi) => D.matches[mi][M.SEASON]);
+    const byCat = playerAgg(p, (s, c) => c);
+    const bySeason = playerAgg(p, (s) => s);
     const grades = new Map();
     byPlayer[p].app.forEach((r) => { const g = D.grades[D.matches[r[0]][M.GRADE]]; grades.set(g, (grades.get(g) || 0) + 1); });
     const topGrades = [...grades.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map((x) => x[0]);
@@ -509,6 +535,8 @@
       <div id="chart"></div>
       <div style="height:16px"></div>
       ${seasonTable}
+
+      <p class="note">Career and season totals match Play Cricket (Club: Sydenham-Hillside). Play Cricket counts some games it doesn't publish scorecards for, so the lists below can't always account for every run.</p>
 
       ${divider("Best performances")}
       <div class="boards">

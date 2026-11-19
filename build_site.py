@@ -47,6 +47,79 @@ def result_code(won, status, text):
     return "D"
 
 
+ADJ_FIELDS = ["matches", "bat_innings", "not_outs", "runs", "fifties", "hundreds", "ducks", "fours",
+              "sixes", "balls_bowled", "maidens", "runs_conceded", "wickets", "five_wi", "catches",
+              "wk_catches", "stumpings", "run_outs"]
+
+
+def official_adjustments(con, players, pid_to_idx, matches, seasons, season_idx, bat, bowl, field, app):
+    """Per profile & season: Play Cricket's official totals minus what the exported
+    scorecard rows add up to. The site adds these rows so its totals match Play Cricket.
+
+    Row: [profile, season, category, *deltas(ADJ_FIELDS), hs, hs_not_out, best_w, best_r]
+    hs / best_w are -1 unless Play Cricket's best is better than any published scorecard.
+    """
+    from collections import Counter, defaultdict
+
+    blank = lambda: {**{f: 0 for f in ADJ_FIELDS}, "hs": -1, "hsno": 0, "bw": -1, "br": 0}
+    sc = defaultdict(blank)
+    cat_count = defaultdict(Counter)
+    for mi, p in app:
+        m = matches[mi]
+        sc[(p, m[0])]["matches"] += 1
+        cat_count[p][m[2]] += 1
+        cat_count[(p, m[0])][m[2]] += 1
+    for mi, p, runs, balls, fours, sixes, no in bat:
+        r = sc[(p, matches[mi][0])]
+        r["bat_innings"] += 1; r["not_outs"] += no; r["runs"] += runs
+        r["fours"] += fours; r["sixes"] += sixes
+        if runs >= 100: r["hundreds"] += 1
+        elif runs >= 50: r["fifties"] += 1
+        if runs == 0 and not no: r["ducks"] += 1
+        if runs > r["hs"] or (runs == r["hs"] and no): r["hs"], r["hsno"] = runs, no
+    for mi, p, balls, mdn, rc, w in bowl:
+        r = sc[(p, matches[mi][0])]
+        r["balls_bowled"] += balls; r["maidens"] += mdn; r["runs_conceded"] += rc; r["wickets"] += w
+        if w >= 5: r["five_wi"] += 1
+        if w > r["bw"] or (w == r["bw"] and rc < r["br"]): r["bw"], r["br"] = w, rc
+    for mi, p, c, wk, st, ro in field:
+        r = sc[(p, matches[mi][0])]
+        r["catches"] += c; r["wk_catches"] += wk; r["stumpings"] += st; r["run_outs"] += ro
+
+    target = defaultdict(blank)
+    cols = ", ".join(ADJ_FIELDS)
+    for row in con.execute(f"SELECT player_id, season, {cols}, high_score, hs_not_out, best_w, best_r, "
+                           f"bat_innings FROM season_stats"):
+        pid, season = row[0], row[1]
+        if pid not in pid_to_idx or season not in season_idx:
+            continue
+        t = target[(pid_to_idx[pid], season_idx[season])]
+        for f, v in zip(ADJ_FIELDS, row[2:2 + len(ADJ_FIELDS)]):
+            t[f] += v or 0
+        hs, hsno, bw, br, inn = row[2 + len(ADJ_FIELDS):]
+        if inn and hs is not None and (hs > t["hs"] or (hs == t["hs"] and hsno)):
+            t["hs"], t["hsno"] = hs, hsno or 0
+        if bw is not None and (bw > t["bw"] or (bw == t["bw"] and (br or 0) < t["br"])):
+            t["bw"], t["br"] = bw, br or 0
+
+    out = []
+    for key in set(target) | set(sc):
+        p, s = key
+        t, m = target.get(key), sc.get(key, blank())
+        if t is None:  # profile has scorecards but no season_stats row (shouldn't happen)
+            continue
+        deltas = [t[f] - m[f] for f in ADJ_FIELDS]
+        hs = t["hs"] if (t["hs"] > m["hs"] or (t["hs"] == m["hs"] and t["hsno"] and not m["hsno"])) else -1
+        better_bb = t["bw"] > m["bw"] or (t["bw"] == m["bw"] and t["bw"] >= 0 and t["br"] < m["br"])
+        bw, br = (t["bw"], t["br"]) if better_bb else (-1, 0)
+        if not any(deltas) and hs < 0 and bw < 0:
+            continue
+        cats = cat_count.get((p, s)) or cat_count.get(p) or Counter({0: 1})
+        out.append([p, s, cats.most_common(1)[0][0], *deltas, hs, t["hsno"] if hs >= 0 else 0, bw, br])
+    out.sort()
+    return out
+
+
 def main():
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
@@ -68,7 +141,8 @@ def main():
 
     # ---- matches ----
     m_rows = q("""SELECT * FROM matches ORDER BY match_date, match_id""")
-    seasons = sorted({r["season"] for r in m_rows})
+    seasons = sorted({r["season"] for r in m_rows} |
+                     {r[0] for r in q("SELECT DISTINCT season FROM season_stats WHERE season IS NOT NULL")})
     season_idx = {s: i for i, s in enumerate(seasons)}
     grades, grade_idx = [], {}
     matches, mid_to_idx = [], {}
@@ -126,6 +200,8 @@ def main():
                   for r in q("SELECT match_id, player_id FROM appearances")
                   if m(r["match_id"]) is not None and r["player_id"] in pid_to_idx})
 
+    adj = official_adjustments(con, players, pid_to_idx, matches, seasons, season_idx, bat, bowl, field, app)
+
     data = {
         "built": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "seasons": [s.replace("Summer ", "") for s in seasons],
@@ -136,6 +212,7 @@ def main():
         "bowl": bowl,
         "field": field,
         "app": [list(a) for a in app],
+        "adj": adj,
     }
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(data, separators=(",", ":")))

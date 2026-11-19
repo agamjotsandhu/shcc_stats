@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Scraper caches (re-downloaded by scrape_history.py / sync_official.py)
+data/raw_matches/
+data/raw_players/
+data/non_shcc_matches.json
+
+# Generated outputs (rebuilt by the scripts; site/data.json is what the live site uses)
+data/shcc_stats.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/shcc_career_stats.csv
+
+# Local tooling / OS / editor
+.claude/
+.vercel/
+.env
+.env.*
+.DS_Store
+.vscode/
+.idea/
+*.log
