@@ -505,22 +505,46 @@
     out.forEach(derive);
     return out;
   }
+  /* Career milestone timeline. Walks scorecards in date order, but each season's contribution is
+     reconciled with Play Cricket's official season totals (scorecard + adjustment rows): a season
+     never adds more than its official figure, and official games/runs/wickets with no scorecard are
+     credited at the end of that season. So milestones never exceed the official career totals. */
   function milestones(p) {
     const P = byPlayer[p];
+    const STATS = [
+      { label: "games", step: 50, adj: 3 },
+      { label: "runs", step: 1000, adj: 6 },
+      { label: "wickets", step: 50, adj: 15 },
+    ];
+    const perMatch = new Map(); // mi -> [games, runs, wkts]
+    const row = (mi) => { let v = perMatch.get(mi); if (!v) { v = [0, 0, 0]; perMatch.set(mi, v); } return v; };
+    P.app.forEach((r) => { row(r[0])[0] = 1; });
+    P.bat.forEach((r) => { row(r[0])[1] += r[2]; });
+    P.bowl.forEach((r) => { row(r[0])[2] += r[5]; });
+    const bySeason = new Map(); // season -> { ms: [mi], official: [g, r, w] }
+    const season = (s) => { let x = bySeason.get(s); if (!x) { x = { ms: [], official: [0, 0, 0] }; bySeason.set(s, x); } return x; };
+    perMatch.forEach((v, mi) => { const x = season(D.matches[mi][M.SEASON]); x.ms.push(mi); v.forEach((n, i) => { x.official[i] += n; }); });
+    P.adj.forEach((r) => { const x = season(r[A.S]); STATS.forEach((st, i) => { x.official[i] += r[st.adj]; }); });
+
     const ev = [];
-    const runsBy = new Map(), wkBy = new Map();
-    P.bat.forEach((r) => runsBy.set(r[0], (runsBy.get(r[0]) || 0) + r[2]));
-    P.bowl.forEach((r) => wkBy.set(r[0], (wkBy.get(r[0]) || 0) + r[5]));
-    const ms = [...new Set([...P.app.map((r) => r[0]), ...runsBy.keys(), ...wkBy.keys()])]
-      .sort((a, b) => (D.matches[a][M.DATE] < D.matches[b][M.DATE] ? -1 : D.matches[a][M.DATE] > D.matches[b][M.DATE] ? 1 : a - b));
-    let g = 0, r = 0, w = 0;
-    const appSet = new Set(P.app.map((x) => x[0]));
-    for (const mi of ms) {
-      if (appSet.has(mi)) { g++; if (g % 50 === 0) ev.push({ t: `${g} games`, mi }); }
-      const pr = r; r += runsBy.get(mi) || 0;
-      if (Math.floor(r / 1000) > Math.floor(pr / 1000)) ev.push({ t: `${Math.floor(r / 1000) * 1000} runs`, mi });
-      const pw = w; w += wkBy.get(mi) || 0;
-      if (Math.floor(w / 50) > Math.floor(pw / 50)) ev.push({ t: `${Math.floor(w / 50) * 50} wickets`, mi });
+    const tot = [0, 0, 0];
+    const add = (i, n, at) => {
+      if (n <= 0) return;
+      const prev = tot[i]; tot[i] += n;
+      const st = STATS[i];
+      for (let k = Math.floor(prev / st.step) + 1; k <= Math.floor(tot[i] / st.step); k++) ev.push({ t: `${k * st.step} ${st.label}`, ...at });
+    };
+    const byDate = (a, b) => (D.matches[a][M.DATE] < D.matches[b][M.DATE] ? -1 : D.matches[a][M.DATE] > D.matches[b][M.DATE] ? 1 : a - b);
+    for (const s of [...bySeason.keys()].sort((a, b) => a - b)) {
+      const x = bySeason.get(s);
+      const used = [0, 0, 0];
+      for (const mi of x.ms.sort(byDate)) {
+        perMatch.get(mi).forEach((n, i) => {
+          const take = Math.min(n, Math.max(0, x.official[i] - used[i]));
+          used[i] += take; add(i, take, { mi });
+        });
+      }
+      x.official.forEach((n, i) => add(i, n - used[i], { s })); // official extras with no scorecard
     }
     return ev;
   }
@@ -572,7 +596,7 @@
           <div><dt>Last played</dt><dd>${lastApp != null ? dateStr(D.matches[lastApp][M.DATE]) : "–"}</dd></div>
         </dl>
       </div>
-      ${ev.length ? `<div class="milestones">${ev.map((e) => `<div class="ms"><strong>${esc(e.t)}</strong><span>${dateStr(D.matches[e.mi][M.DATE])} v ${esc(D.matches[e.mi][M.OPP])}</span></div>`).join("")}</div>` : ""}
+      ${ev.length ? `<div class="milestones">${ev.map((e) => `<div class="ms"><strong>${esc(e.t)}</strong><span>${e.mi != null ? `${dateStr(D.matches[e.mi][M.DATE])} v ${esc(D.matches[e.mi][M.OPP])}` : `During ${esc(seasonLabel(e.s))}`}</span></div>`).join("")}</div>` : ""}
 
       <div class="tiles" style="margin-top:32px">
         <div class="tile"><span class="num">${fmtN(tot.runs)}</span><span class="eyebrow">Runs</span></div>
