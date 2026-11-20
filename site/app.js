@@ -398,8 +398,12 @@
   ];
   function pageMilestones() {
     const latest = D.seasons.length - 1;
-    const all = agg();
-    const cur = agg({ season: latest });
+    // Milestones are always career totals across every competition (men's, women's and juniors),
+    // regardless of the competition filter.
+    const any = () => true; any.adj = () => true;
+    const inLatest = (mi) => D.matches[mi][M.SEASON] === latest; inLatest.adj = (r) => r[A.S] === latest;
+    const all = aggregate(any, "ms|all");
+    const cur = aggregate(inLatest, "ms|cur");
     const players = [...all.entries()].filter(([p]) => isReal(p) && cur.get(p)?.m > 0);
 
     const upcoming = MILESTONES.map((ms) => {
@@ -433,8 +437,8 @@
         sub: `${fmtN(x.v)} → ${fmtN(x.t)} ${ms.unit}` })));
 
     $app.innerHTML = `
-      <div class="page-head"><p class="eyebrow">${esc(catName())} ${boltSvg} ${esc(seasonLabel(latest))}</p><h1 class="page-title">Milestones</h1></div>
-      <p class="lede" style="margin:0 0 20px">Players who have played in ${esc(seasonLabel(latest))} closing in on career milestones. Totals are for ${cat === "all" ? "all competitions combined" : esc(catName()) + " competitions"} and match Play Cricket.</p>
+      <div class="page-head"><p class="eyebrow">All competitions ${boltSvg} ${esc(seasonLabel(latest))}</p><h1 class="page-title">Milestones</h1></div>
+      <p class="lede" style="margin:0 0 20px">Players who have played in ${esc(seasonLabel(latest))} closing in on career milestones. Career totals combine men's, women's and junior cricket and match Play Cricket.</p>
       ${divider("Coming up")}
       <div class="boards">${upcoming.filter((u) => u.list.length).map(upBoard).join("") || '<p class="empty">No one is close to a milestone right now.</p>'}</div>
       ${divider(`Reached in ${seasonLabel(latest)}`)}
