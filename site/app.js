@@ -394,7 +394,6 @@
     { key: "runs", title: "Runs", unit: "runs", get: (s) => s.runs, step: 500, win: (t) => Math.min(250, t * 0.1) },
     { key: "wk", title: "Wickets", unit: "wkts", get: (s) => s.wk, step: 50, win: (t) => Math.max(5, t * 0.1) },
     { key: "m", title: "Matches", unit: "games", get: (s) => s.m, step: 50, win: (t) => Math.max(5, t * 0.05) },
-    { key: "fifty", title: "50+ scores", unit: "50+ scores", get: (s) => s.f50 + s.h100, step: 10, win: (t) => (t >= 20 ? 2 : 1) },
     { key: "dis", title: "Dismissals", unit: "dismissals", get: (s) => s.dis, step: 50, win: (t) => Math.max(5, t * 0.1) },
   ];
   function pageMilestones() {
